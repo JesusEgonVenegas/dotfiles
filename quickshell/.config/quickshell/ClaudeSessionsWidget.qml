@@ -42,8 +42,30 @@ Item {
         return h > 0 ? h + "h" + (m < 10 ? "0" : "") + m + "m"
              : m > 0 ? m + "m" : "<1m"
     }
+    // Baseline is Claude's brand coral; escalates to amber then red under load.
     function usageColor(n) {
-        return n >= winRed ? Theme.critical : n >= winAmber ? Theme.warning : Theme.muted
+        return n >= winRed ? Theme.critical : n >= winAmber ? Theme.warning : Theme.claude
+    }
+
+    // Monospace padding helpers for the aligned tooltip table.
+    function padR(s, n) { s = "" + s; while (s.length < n) s += " "; return s }
+    function padL(s, n) { s = "" + s; while (s.length < n) s = " " + s; return s }
+    function usageBody() {
+        var L = 9, V = 7, div = "─".repeat(23), rows = []
+        rows.push(padR("sessions", L) + padL(root.count, V))
+        rows.push(div)
+        var w = padR("5h block", L) + padL(fmtTok(ClaudeState.winTokens), V)
+        if (root.resetLeft > 0) w += "  󰑐 " + fmtDur(root.resetLeft)
+        rows.push(w)
+        if (ClaudeState.peakTokens > 0)
+            rows.push(padR("peak 5h", L) + padL(fmtTok(ClaudeState.peakTokens), V))
+        rows.push(padR("today", L) + padL(fmtTok(ClaudeState.dayTokens), V))
+        rows.push(padR("week", L) + padL(fmtTok(ClaudeState.weekTokens), V))
+        if (ClaudeState.totalCost > 0) {
+            rows.push(div)
+            rows.push(padR("cost", L) + padL("$" + ClaudeState.totalCost.toFixed(2), V) + "  API-equiv")
+        }
+        return rows.join("\n")
     }
 
     visible: count > 0
@@ -55,10 +77,10 @@ Item {
         anchors.centerIn: parent
         spacing: 6
 
-        // nf-md-robot_outline — quieter than the amber "waiting" robot
+        // nf-md-robot_outline in Claude coral — the widget's brand mark
         Text {
             text: "󱚟"
-            color: Theme.muted
+            color: Theme.claude
             font.pixelSize: Theme.fontMd
             font.family: Theme.fontMono
             anchors.verticalCenter: parent.verticalCenter
@@ -97,14 +119,7 @@ Item {
     HoverHandler {
         cursorShape: Qt.PointingHandCursor
         onHoveredChanged: hovered
-            ? TooltipState.show("Claude Code",
-                root.count + " live"
-                + "\n" + root.fmtTok(ClaudeState.winTokens) + " tok this 5h block"
-                + (root.resetLeft > 0 ? "  ·  resets in " + root.fmtDur(root.resetLeft) : "")
-                + (ClaudeState.peakTokens > 0 ? "\npeak 5h block  " + root.fmtTok(ClaudeState.peakTokens) : "")
-                + "\n" + root.fmtTok(ClaudeState.dayTokens) + " today  ·  "
-                + root.fmtTok(ClaudeState.weekTokens) + " this week"
-                + (ClaudeState.totalCost > 0 ? "\n$" + ClaudeState.totalCost.toFixed(2) + " API-equiv" : ""),
+            ? TooltipState.show("Claude Code", root.usageBody(),
                 root.mapToGlobal(root.width / 2, 0).x)
             : TooltipState.hide()
     }

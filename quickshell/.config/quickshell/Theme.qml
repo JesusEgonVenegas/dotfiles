@@ -24,6 +24,9 @@ Singleton {
     property color warning:   Qt.hsla(0.075, 0.95, 0.58, 1.0)
     // Critical: red, used sparingly
     property color critical:  Qt.hsla(0.0,   0.88, 0.60, 1.0)
+    // Claude brand coral (#D97757) — identity color for the Claude Code widgets.
+    // Sits redward of the amber accent, so it stays distinct from "busy" amber.
+    property color claude:    Qt.hsla(0.041, 0.62, 0.60, 1.0)
 
     // ===== BAR / CHIP BACKGROUNDS =====
     property real barOpacity: 0.97
