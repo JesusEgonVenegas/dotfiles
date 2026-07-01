@@ -33,6 +33,16 @@ Item {
             font.family: Theme.fontUi
             anchors.verticalCenter: parent.verticalCenter
         }
+
+        // Live spend across active sessions (from the statusLine cost feed)
+        Text {
+            visible: ClaudeState.totalCost > 0
+            text: "$" + ClaudeState.totalCost.toFixed(2)
+            color: Theme.accentAlt
+            font.pixelSize: Theme.fontXs
+            font.family: Theme.fontUi
+            anchors.verticalCenter: parent.verticalCenter
+        }
     }
 
     HoverHandler { cursorShape: Qt.PointingHandCursor }

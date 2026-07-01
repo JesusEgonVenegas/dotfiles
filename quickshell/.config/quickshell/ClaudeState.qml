@@ -17,6 +17,10 @@ Singleton {
     // Raw session list from disk.
     property var sessions: []
 
+    // Total $ spent across sessions active in the last hour (fed by the
+    // statusLine script writing per-session cost files under cost/).
+    property real totalCost: 0
+
     // Sessions needing attention. "action" = must be answered (permission
     // prompt); "done" = finished/idle, informational (auto-clears on visit).
     readonly property var waiting: sessions.filter(
@@ -73,7 +77,21 @@ Singleton {
             // If a "done" session appears on the workspace we're already on,
             // clear it immediately rather than waiting for a focus change.
             root.clearDoneOn(root.focusedWs)
+            costProc.running = true
         }
         onLoadFailed: root.sessions = []
     }
+
+    // Sum cost across sessions active in the last hour; prune files older than
+    // 12h. Refreshed on every state change and on a slow timer.
+    Process {
+        id: costProc
+        command: ["sh", "-c",
+            "d=\"${XDG_STATE_HOME:-$HOME/.local/state}/cc-bar/cost\"; " +
+            "[ -d \"$d\" ] || { echo 0; exit 0; }; " +
+            "find \"$d\" -name '*.json' -mmin +720 -delete 2>/dev/null; " +
+            "jq -s 'map(select((now - .ts) < 3600) | .cost) | add // 0' \"$d\"/*.json 2>/dev/null || echo 0"]
+        stdout: StdioCollector { onStreamFinished: root.totalCost = parseFloat(text.trim()) || 0 }
+    }
+    Timer { interval: 30000; running: true; repeat: true; onTriggered: costProc.running = true }
 }
