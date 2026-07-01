@@ -85,10 +85,11 @@ Item {
         // Time until the current block resets (frees up rate-limit headroom).
         Text {
             visible: root.resetLeft > 0
-            text: "↻" + root.fmtDur(root.resetLeft)
+            // nf-md-refresh — bolder than a bare ↻; reads as "block resets in".
+            text: "󰑐 " + root.fmtDur(root.resetLeft)
             color: Theme.muted
             font.pixelSize: Theme.fontSm
-            font.family: Theme.fontUi
+            font.family: Theme.fontMono
             anchors.verticalCenter: parent.verticalCenter
         }
     }
