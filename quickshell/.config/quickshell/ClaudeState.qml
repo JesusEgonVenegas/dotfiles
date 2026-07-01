@@ -28,6 +28,11 @@ Singleton {
     property real peakTokens: 0  // largest closed 5h block seen — self-calibrates thresholds
     property double resetAt: 0   // epoch the open 5h block resets (0 when idle)
 
+    // Current-block consumption split by model family (Opus burns fastest).
+    property real winOpus: 0
+    property real winSonnet: 0
+    property real winHaiku: 0
+
     // --- Low-headroom alert -------------------------------------------------
     // Fire one desktop notification per 5h block when consumption crosses ~95%
     // of the calibrated peak, so you get a heads-up before hitting the wall
@@ -159,6 +164,9 @@ Singleton {
                 root.weekTokens = u.week || 0
                 root.peakTokens = u.peak || 0
                 root.resetAt    = u.reset || 0
+                root.winOpus    = u.opus   || 0
+                root.winSonnet  = u.sonnet || 0
+                root.winHaiku   = u.haiku  || 0
                 root.maybeAlert()
             } catch (e) {}
         } }

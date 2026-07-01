@@ -62,6 +62,12 @@ Item {
         var w = padR("5h block", L) + padL(fmtTok(ClaudeState.winTokens), V)
         if (root.resetLeft > 0) w += nb + nb + "󰑐" + nb + fmtDur(root.resetLeft)
         rows.push(w)
+        // Per-model split, only when the block actually spans >1 model.
+        var mods = [["opus", ClaudeState.winOpus], ["sonnet", ClaudeState.winSonnet],
+                    ["haiku", ClaudeState.winHaiku]].filter(function (m) { return m[1] > 0 })
+        if (mods.length >= 2)
+            for (var i = 0; i < mods.length; i++)
+                rows.push(padR(nb + nb + mods[i][0], L) + padL(fmtTok(mods[i][1]), V))
         if (ClaudeState.peakTokens > 0)
             rows.push(padR("peak 5h", L) + padL(fmtTok(ClaudeState.peakTokens), V))
         rows.push(padR("today", L) + padL(fmtTok(ClaudeState.dayTokens), V))
