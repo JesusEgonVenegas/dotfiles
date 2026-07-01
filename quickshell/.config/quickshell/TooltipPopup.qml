@@ -30,7 +30,7 @@ Scope {
                 anchors.fill: parent
                 radius: Theme.radiusSm
                 color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.97)
-                border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.25)
+                border.color: Qt.rgba(TooltipState.accent.r, TooltipState.accent.g, TooltipState.accent.b, 0.30)
                 border.width: 1
 
                 ColumnLayout {
@@ -40,7 +40,7 @@ Scope {
 
                     Text {
                         text: TooltipState.title
-                        color: Theme.accent
+                        color: TooltipState.accent
                         font.pixelSize: Theme.fontMd
                         font.bold: true
                         font.family: Theme.fontMono
@@ -50,6 +50,7 @@ Scope {
                     Text {
                         visible: TooltipState.body !== ""
                         text: TooltipState.body
+                        textFormat: TooltipState.rich ? Text.StyledText : Text.PlainText
                         color: Theme.fg
                         font.pixelSize: Theme.fontMd
                         font.family: Theme.fontMono

@@ -47,15 +47,20 @@ Item {
         return n >= winRed ? Theme.critical : n >= winAmber ? Theme.warning : Theme.claude
     }
 
-    // Monospace padding helpers for the aligned tooltip table.
-    function padR(s, n) { s = "" + s; while (s.length < n) s += " "; return s }
-    function padL(s, n) { s = "" + s; while (s.length < n) s = " " + s; return s }
+    // Aligned label/value table for the tooltip, emitted as StyledText so the
+    // divider lines can carry Claude's coral. Padding uses non-breaking spaces
+    // ( ) because StyledText collapses ordinary runs of whitespace, which
+    // would wreck the monospace column alignment.
+    readonly property string nb: " "
+    function padR(s, n) { s = "" + s; while (s.length < n) s += nb; return s }
+    function padL(s, n) { s = "" + s; while (s.length < n) s = nb + s; return s }
     function usageBody() {
-        var L = 9, V = 7, div = "─".repeat(23), rows = []
+        var L = 9, V = 7, rows = []
+        var div = "<font color=\"#d97757\">" + "─".repeat(23) + "</font>"
         rows.push(padR("sessions", L) + padL(root.count, V))
         rows.push(div)
         var w = padR("5h block", L) + padL(fmtTok(ClaudeState.winTokens), V)
-        if (root.resetLeft > 0) w += "  󰑐 " + fmtDur(root.resetLeft)
+        if (root.resetLeft > 0) w += nb + nb + "󰑐" + nb + fmtDur(root.resetLeft)
         rows.push(w)
         if (ClaudeState.peakTokens > 0)
             rows.push(padR("peak 5h", L) + padL(fmtTok(ClaudeState.peakTokens), V))
@@ -63,9 +68,9 @@ Item {
         rows.push(padR("week", L) + padL(fmtTok(ClaudeState.weekTokens), V))
         if (ClaudeState.totalCost > 0) {
             rows.push(div)
-            rows.push(padR("cost", L) + padL("$" + ClaudeState.totalCost.toFixed(2), V) + "  API-equiv")
+            rows.push(padR("cost", L) + padL("$" + ClaudeState.totalCost.toFixed(2), V) + nb + nb + "API-equiv")
         }
-        return rows.join("\n")
+        return rows.join("<br/>")
     }
 
     visible: count > 0
@@ -120,7 +125,7 @@ Item {
         cursorShape: Qt.PointingHandCursor
         onHoveredChanged: hovered
             ? TooltipState.show("Claude Code", root.usageBody(),
-                root.mapToGlobal(root.width / 2, 0).x)
+                root.mapToGlobal(root.width / 2, 0).x, Theme.claude, true)
             : TooltipState.hide()
     }
     MouseArea { anchors.fill: parent; onClicked: LauncherState.openClaude() }

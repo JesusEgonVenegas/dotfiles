@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Hyprland
 
 // Dedicated Claude Code indicator. Hidden while no session needs you; when one
-// or more sessions are waiting it expands into a pulsing amber chip showing the
+// or more sessions are waiting it expands into a pulsing coral chip showing the
 // count. Click to jump to the workspace of the first waiting session.
 Item {
     id: root
@@ -21,8 +21,8 @@ Item {
         implicitWidth: pillRow.implicitWidth + 20
         height: Theme.barHeight - 10
         radius: Theme.radiusSm
-        color: Qt.rgba(Theme.accentAlt.r, Theme.accentAlt.g, Theme.accentAlt.b, 0.10)
-        border.color: Theme.accentAlt
+        color: Qt.rgba(Theme.claude.r, Theme.claude.g, Theme.claude.b, 0.10)
+        border.color: Theme.claude
         border.width: 1
 
         // Pulse the border/background to draw the eye.
@@ -41,7 +41,7 @@ Item {
             // nf-md-robot — "Claude is waiting"
             Text {
                 text: "󰚩"
-                color: Theme.accentAlt
+                color: Theme.claude
                 font.pixelSize: Theme.fontMd
                 font.family: Theme.fontMono
                 anchors.verticalCenter: parent.verticalCenter
@@ -49,7 +49,7 @@ Item {
 
             Text {
                 text: ClaudeState.waitingCount.toString()
-                color: Theme.accentAlt
+                color: Theme.claude
                 font.pixelSize: Theme.fontSm
                 font.weight: Theme.fontWeight
                 font.family: Theme.fontUi
