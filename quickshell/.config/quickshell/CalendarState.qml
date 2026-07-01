@@ -172,6 +172,47 @@ Singleton {
         syncProc.running = true
     }
 
+    // ===== REMINDERS =====
+    // Ping the desktop (notify-send → the Quickshell notif daemon) a few minutes
+    // before a timed event starts. Runs whether or not the panel is open, and
+    // refreshes the event cache every ~5 min so it stays current. All-day events
+    // are skipped (no useful ping time).
+    property int reminderLeadMin: 10
+    property var notifiedUids: ({})
+    property int reminderRefreshTicks: 0
+
+    function eventStartMs(ev) {
+        if (!ev.time || ev.time.length === 0) return 0
+        const d = ev.date.split("-"), t = ev.time.split(":")
+        return new Date(+d[0], +d[1] - 1, +d[2], +t[0], +t[1], 0).getTime()
+    }
+
+    function checkReminders() {
+        if (reminderRefreshTicks <= 0) { eventsProc.running = true; reminderRefreshTicks = 5 }
+        reminderRefreshTicks--
+
+        const now = Date.now()
+        const leadMs = reminderLeadMin * 60000
+        for (let i = 0; i < events.length; i++) {
+            const ev = events[i]
+            const s = eventStartMs(ev)
+            if (s === 0) continue
+            const delta = s - now
+            if (delta > 0 && delta <= leadMs && !notifiedUids[ev.uid]) {
+                notifiedUids[ev.uid] = true
+                const mins = Math.max(1, Math.round(delta / 60000))
+                Quickshell.execDetached(["notify-send", "-a", "Calendar", "-u", "normal",
+                    ev.title, "in " + mins + " min · " + ev.time])
+            }
+        }
+    }
+
+    Timer {
+        id: reminderTick
+        interval: 60000; running: true; repeat: true; triggeredOnStart: true
+        onTriggered: root.checkReminders()
+    }
+
     // Small debounce so an append has landed before we re-read the note.
     Timer { id: todosReload; interval: 120; onTriggered: todosProc.running = true }
 
