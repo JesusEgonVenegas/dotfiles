@@ -6,10 +6,17 @@ Item {
     height: Theme.barHeight
 
     HoverHandler {
+        cursorShape: Qt.PointingHandCursor
         onHoveredChanged: hovered
             ? TooltipState.show(Time.timeOnly, Time.dateOnly,
                                 root.mapToGlobal(root.width / 2, 0).x)
             : TooltipState.hide()
+    }
+
+    // Click → open the calendar / agenda / todos panel.
+    MouseArea {
+        anchors.fill: parent
+        onClicked: { TooltipState.hide(); CalendarState.toggle() }
     }
 
     Row {

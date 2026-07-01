@@ -14,6 +14,7 @@ Scope {
     RecordMenuPopup {}
     LauncherPopup {}
     QuickIdeaPopup {}
+    CalendarPopup {}
 
     // Super+D (bound in hyprland.conf: `global, quickshell:launcher`)
     GlobalShortcut {
@@ -27,6 +28,13 @@ Scope {
         appid: "quickshell"
         name: "quickidea"
         onPressed: QuickIdeaState.toggle()
+    }
+
+    // Super+Shift+C (bound in hyprland.conf: `global, quickshell:calendar`)
+    GlobalShortcut {
+        appid: "quickshell"
+        name: "calendar"
+        onPressed: CalendarState.toggle()
     }
 
     // Super+C (bound in hyprland.conf: `global, quickshell:claude`) — launcher

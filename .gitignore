@@ -1,2 +1,6 @@
 # local Claude Code settings (not portable)
 **/.claude/
+
+# Python bytecode from quickshell helper scripts
+__pycache__/
+*.pyc
