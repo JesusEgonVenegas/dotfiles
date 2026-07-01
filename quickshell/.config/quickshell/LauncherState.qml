@@ -22,6 +22,38 @@ Singleton {
     // Modes, chosen by the first character of the query.
     readonly property bool webMode:    query.trim().charAt(0) === "?"
     readonly property bool windowMode: query.trim().charAt(0) === "/"
+    readonly property bool ccMode: {           // "cc" / "cc <filter>" -> Claude
+        const m = query.trim().toLowerCase()
+        return m === "cc" || m.startsWith("cc ")
+    }
+    property var ccProjects: []   // recent project cwds (strings), from cc-projects.sh
+
+    function cwdBase(p) {
+        if (!p) return "?"
+        const s = ("" + p).replace(/\/+$/, "")
+        const i = s.lastIndexOf("/")
+        return i >= 0 ? s.slice(i + 1) : s
+    }
+    function prettyPath(p) { return ("" + p).replace(Quickshell.env("HOME"), "~") }
+
+    // Combined Claude view: live sessions (jump to) + recent projects (open new).
+    readonly property var ccItems: {
+        const sess = (ClaudeState.sessions || []).map(s => ({
+            isSession: true, cwd: s.cwd, ws: s.ws,
+            name: cwdBase(s.cwd),
+            genericName: "session · " + s.state + (s.ws != null ? "  ·  ws " + s.ws : ""),
+            icon: "utilities-terminal"
+        }))
+        const openCwds = {}
+        sess.forEach(s => { if (s.cwd) openCwds[s.cwd] = true })
+        const proj = (ccProjects || []).filter(p => !openCwds[p]).map(p => ({
+            isProject: true, cwd: p,
+            name: cwdBase(p),
+            genericName: prettyPath(p),
+            icon: "folder"
+        }))
+        return sess.concat(proj)
+    }
 
     readonly property string stateDir:  Quickshell.env("HOME") + "/.local/state/quickshell"
     readonly property string usagePath: stateDir + "/launcher-usage.json"
@@ -51,6 +83,13 @@ Singleton {
     readonly property var filtered: {
         // calc/web modes don't drive the list (they show a hint panel instead).
         if (calcMode || webMode) return []
+        // Claude: live sessions + recent projects.
+        if (ccMode) {
+            const cq = query.trim().slice(2).trim().toLowerCase()
+            if (cq.length === 0) return ccItems
+            return ccItems.filter(it =>
+                (it.name + " " + it.genericName + " " + (it.cwd || "")).toLowerCase().indexOf(cq) >= 0)
+        }
         // window switcher: filter the preloaded open windows.
         if (windowMode) {
             const wq = query.trim().slice(1).trim().toLowerCase()
@@ -82,17 +121,23 @@ Singleton {
     property string calcResult: ""
     onQueryChanged: { if (calcMode) calcTimer.restart(); else calcResult = "" }
 
-    function open()   { query = ""; calcResult = ""; clientsProc.running = true; visible = true }
+    function open()   { query = ""; calcResult = ""; clientsProc.running = true; ccProjProc.running = true; visible = true }
     function close()  { visible = false; query = "" }
     function toggle() { if (visible) close(); else open() }
+    function openClaude() { open(); query = "cc " }   // Super+C: straight into Claude mode
 
-    // Launch an app entry OR focus an open window (window items carry .isWindow).
+    // Launch: focus a window / jump to a session / open a project in claude / run an app.
     function launch(item) {
         if (!item) return
         if (item.isWindow) {
-            Hyprland.dispatch("focuswindow address:" + item.address)
-            close()
-            return
+            Hyprland.dispatch("focuswindow address:" + item.address); close(); return
+        }
+        if (item.isSession) {
+            if (item.ws != null) Hyprland.dispatch("workspace " + item.ws)
+            close(); return
+        }
+        if (item.isProject) {
+            Quickshell.execDetached(["foot", "-D", item.cwd, "claude"]); close(); return
         }
         var c = counts
         c[item.id] = (c[item.id] || 0) + 1   // bump usage count and persist
@@ -170,5 +215,13 @@ Singleton {
         id: clientsProc
         command: ["hyprctl", "clients", "-j"]
         stdout: StdioCollector { onStreamFinished: root.parseClients(text) }
+    }
+
+    // Recent Claude project dirs for the "cc" mode.
+    function parseProjects(text) { ccProjects = text.split("\n").filter(l => l.length > 0) }
+    Process {
+        id: ccProjProc
+        command: [Quickshell.env("HOME") + "/.config/quickshell/scripts/cc-projects.sh"]
+        stdout: StdioCollector { onStreamFinished: root.parseProjects(text) }
     }
 }

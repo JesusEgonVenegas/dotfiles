@@ -61,6 +61,7 @@ Scope {
                         Text {
                             text: LauncherState.calcMode   ? "= calc"
                                 : LauncherState.webMode     ? "? web"
+                                : LauncherState.ccMode      ? (LauncherState.filtered.length + " claude")
                                 : LauncherState.windowMode  ? (LauncherState.filtered.length + " windows")
                                 :                             (LauncherState.filtered.length + " apps")
                             color: (LauncherState.calcMode || LauncherState.webMode) ? Theme.accentAlt : Theme.muted
@@ -81,7 +82,7 @@ Scope {
                         Text {
                             visible: search.text.length === 0
                             anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
-                            text: "Search apps  ·  = calc  ·  ? web  ·  / windows"
+                            text: "apps  ·  = calc  ·  ? web  ·  / windows  ·  cc claude"
                             color: Theme.muted
                             font.pixelSize: Theme.fontSm
                             font.family: Theme.fontUi
@@ -286,6 +287,7 @@ Scope {
                         Text {
                             text: LauncherState.calcMode   ? "Enter copy result · Esc close"
                                 : LauncherState.webMode     ? "Enter search web · Esc close"
+                                : LauncherState.ccMode      ? "↑↓ move · Enter open/jump · Esc close"
                                 : LauncherState.windowMode  ? "↑↓ move · Enter focus window · Esc close"
                                 :                             "↑↓ move · Enter launch · Esc close"
                             color: Theme.muted

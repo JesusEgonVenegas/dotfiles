@@ -29,6 +29,14 @@ Scope {
         onPressed: QuickIdeaState.toggle()
     }
 
+    // Super+C (bound in hyprland.conf: `global, quickshell:claude`) — launcher
+    // straight into "cc" mode: live Claude sessions + recent projects.
+    GlobalShortcut {
+        appid: "quickshell"
+        name: "claude"
+        onPressed: LauncherState.openClaude()
+    }
+
     // Super+Shift+V (bound in hyprland.conf: `global, quickshell:clipboard`)
     GlobalShortcut {
         appid: "quickshell"

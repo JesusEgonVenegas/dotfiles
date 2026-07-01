@@ -41,6 +41,12 @@ Scope {
                     Layout.rightMargin: 4
                 }
 
+                // Claude Code — live session count (click → cc launcher)
+                ClaudeSessionsWidget {
+                    Layout.alignment: Qt.AlignVCenter
+                    Layout.rightMargin: 4
+                }
+
                 // Claude Code — only takes space when a session needs input
                 ClaudeWidget {
                     Layout.alignment: Qt.AlignVCenter

@@ -39,6 +39,14 @@ rebuild_aggregate() {
     ) 9>"$LOCK"
 }
 
+# Desktop ping (toast + soft sound) to pull you back to a session. Fire-and-forget
+# so it never slows or fails the hook.
+notify_user() {
+    local urgency="$1" title="$2" body="$3" sound="$4"
+    notify-send -a "Claude Code" -u "$urgency" "$title" "$body" >/dev/null 2>&1 || true
+    canberra-gtk-play -i "$sound" >/dev/null 2>&1 &
+}
+
 # Walk up the process tree from this hook to the terminal window and echo the
 # Hyprland workspace id that window currently lives on. Empty if not found.
 detect_ws() {
@@ -114,6 +122,7 @@ if [ "$state" = "busy" ] && [ -f "$sess_file" ] \
     exit 0
 fi
 
+old_state="$(jq -r '.state // empty' "$sess_file" 2>/dev/null || true)"
 ws="$(detect_ws)"
 ts="$(date +%s)"
 
@@ -128,3 +137,16 @@ jq -nc \
 mv -f "$tmp" "$sess_file"
 
 rebuild_aggregate
+
+# Ping on a genuine state change, but only if you're NOT already looking at that
+# session's workspace — so you get pulled back when away, never spammed when present.
+if [ "$state" != "$old_state" ] && [ -n "$ws" ]; then
+    focused_ws="$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id // empty' || true)"
+    if [ "$ws" != "$focused_ws" ]; then
+        proj="$(basename "$cwd" 2>/dev/null || echo session)"
+        case "$state" in
+            action) notify_user critical "Claude needs you" "$proj · waiting on a prompt" "dialog-warning" ;;
+            done)   notify_user normal   "Claude finished"  "$proj · your turn"          "message" ;;
+        esac
+    fi
+fi
