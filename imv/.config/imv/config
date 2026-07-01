@@ -1,0 +1,20 @@
+# imv config — see: man 5 imv
+# imv loads its built-in defaults first, then this file on top. So the defaults
+# still work (arrow keys + [ / ] for prev/next, hjkl to pan, f fullscreen,
+# x/q close, c center, d overlay...); the binds below add/override.
+
+[binds]
+# Prev / next on the keys muscle-memory expects. hjkl stays as pan.
+n = next
+p = prev
+
+# imv's default 'p' printed the file path — kept here on Shift+P.
+P = exec echo "$imv_current_file"
+
+# y = yank the current image to the Wayland clipboard (correct mime type),
+# with a notification via the quickshell daemon.
+y = exec wl-copy -t "$(file -b --mime-type "$imv_current_file")" < "$imv_current_file" && notify-send -a imv -i "$imv_current_file" "Copied to clipboard" "$(basename "$imv_current_file")"
+
+# Shift+X = send current image to trash (recoverable via gio trash), then drop
+# it from the view. On Shift so it can't be fat-fingered next to x (=close).
+<Shift+x> = exec gio trash "$imv_current_file" && notify-send -a imv "Trashed" "$(basename "$imv_current_file")"; close
