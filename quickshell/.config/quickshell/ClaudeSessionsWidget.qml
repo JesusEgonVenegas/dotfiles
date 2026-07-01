@@ -77,7 +77,7 @@ Item {
             visible: ClaudeState.winTokens > 0
             text: root.fmtTok(ClaudeState.winTokens)
             color: root.usageColor(ClaudeState.winTokens)
-            font.pixelSize: Theme.fontXs
+            font.pixelSize: Theme.fontSm
             font.family: Theme.fontUi
             anchors.verticalCenter: parent.verticalCenter
         }
@@ -87,7 +87,7 @@ Item {
             visible: root.resetLeft > 0
             text: "↻" + root.fmtDur(root.resetLeft)
             color: Theme.muted
-            font.pixelSize: Theme.fontXs
+            font.pixelSize: Theme.fontSm
             font.family: Theme.fontUi
             anchors.verticalCenter: parent.verticalCenter
         }

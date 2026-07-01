@@ -23,8 +23,8 @@ Scope {
             }
 
             color: "transparent"
-            implicitWidth: col.implicitWidth + 24
-            implicitHeight: col.implicitHeight + 16
+            implicitWidth: col.implicitWidth + 28
+            implicitHeight: col.implicitHeight + 22
 
             Rectangle {
                 anchors.fill: parent
@@ -36,12 +36,12 @@ Scope {
                 ColumnLayout {
                     id: col
                     anchors.centerIn: parent
-                    spacing: 2
+                    spacing: 5
 
                     Text {
                         text: TooltipState.title
                         color: Theme.accent
-                        font.pixelSize: Theme.fontSm
+                        font.pixelSize: Theme.fontMd
                         font.bold: true
                         font.family: Theme.fontMono
                         Layout.alignment: Qt.AlignHCenter
@@ -51,8 +51,9 @@ Scope {
                         visible: TooltipState.body !== ""
                         text: TooltipState.body
                         color: Theme.fg
-                        font.pixelSize: Theme.fontSm
+                        font.pixelSize: Theme.fontMd
                         font.family: Theme.fontMono
+                        lineHeight: 1.35
                         Layout.alignment: Qt.AlignHCenter
                     }
                 }
