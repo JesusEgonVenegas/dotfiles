@@ -36,19 +36,8 @@ Scope {
                 border.width: 1
                 border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.35)
 
-                // Calculator mode: a leading "=" evaluates a math expression.
-                property bool calcMode: search.text.trim().charAt(0) === "="
-                property string calcResult: calcMode ? evalExpr(search.text.trim().slice(1)) : ""
-                function evalExpr(e) {
-                    const s = (e || "").trim()
-                    if (s.length === 0) return ""
-                    if (!/^[-0-9.+*/%()\s]*$/.test(s)) return "…"   // digits/operators only — no code exec
-                    try {
-                        const r = (Function("return (" + s + ")"))()
-                        return (r === undefined || r === null || (typeof r === "number" && !isFinite(r)))
-                               ? "…" : String(r)
-                    } catch (err) { return "…" }
-                }
+                // Calculator mode is driven by LauncherState (qalc backend).
+                readonly property bool calcMode: LauncherState.calcMode
 
                 // Swallow clicks inside the panel so they don't hit the closer.
                 MouseArea { anchors.fill: parent }
@@ -70,8 +59,11 @@ Scope {
                         }
                         Item { Layout.fillWidth: true }
                         Text {
-                            text: panel.calcMode ? "= calc" : LauncherState.filtered.length + " apps"
-                            color: panel.calcMode ? Theme.accentAlt : Theme.muted
+                            text: LauncherState.calcMode   ? "= calc"
+                                : LauncherState.webMode     ? "? web"
+                                : LauncherState.windowMode  ? (LauncherState.filtered.length + " windows")
+                                :                             (LauncherState.filtered.length + " apps")
+                            color: (LauncherState.calcMode || LauncherState.webMode) ? Theme.accentAlt : Theme.muted
                             font.pixelSize: Theme.fontXs
                             font.family: Theme.fontUi
                         }
@@ -89,7 +81,7 @@ Scope {
                         Text {
                             visible: search.text.length === 0
                             anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
-                            text: "Search apps…  ·  = for calculator"
+                            text: "Search apps  ·  = calc  ·  ? web  ·  / windows"
                             color: Theme.muted
                             font.pixelSize: Theme.fontSm
                             font.family: Theme.fontUi
@@ -120,12 +112,14 @@ Scope {
                             }
                             function activate() {
                                 if (panel.calcMode) {
-                                    if (panel.calcResult.length && panel.calcResult !== "…")
+                                    const r = LauncherState.calcResult
+                                    if (r.length && r !== "…")
                                         Quickshell.execDetached(["sh", "-c",
-                                            "printf %s '" + panel.calcResult + "' | wl-copy"])
+                                            "printf %s \"$1\" | wl-copy", "--", r])
                                     LauncherState.close()
                                     return
                                 }
+                                if (LauncherState.webMode) { LauncherState.webSearch(); return }
                                 LauncherState.launch(LauncherState.filtered[list.currentIndex])
                             }
                             Keys.onReturnPressed: activate()
@@ -136,7 +130,7 @@ Scope {
                     // App list
                     ListView {
                         id: list
-                        visible: !panel.calcMode
+                        visible: !LauncherState.calcMode && !LauncherState.webMode
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         clip: true
@@ -240,11 +234,48 @@ Scope {
                             }
                             Text {
                                 Layout.alignment: Qt.AlignHCenter
-                                text: "= " + (panel.calcResult || "…")
+                                text: "= " + (LauncherState.calcResult || "…")
                                 color: Theme.accentAlt
                                 font.pixelSize: Theme.fontXl
                                 font.weight: Theme.fontWeight
                                 font.family: Theme.fontMono
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                    }
+
+                    // Web-search hint (shown instead of the list in "?" mode)
+                    Rectangle {
+                        visible: LauncherState.webMode
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        radius: Theme.radiusSm
+                        color: Qt.rgba(Theme.accentAlt.r, Theme.accentAlt.g, Theme.accentAlt.b, 0.06)
+                        border.width: 1
+                        border.color: Qt.rgba(Theme.accentAlt.r, Theme.accentAlt.g, Theme.accentAlt.b, 0.22)
+
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            width: parent.width - 32
+                            spacing: 8
+                            Text {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: "󰖟  search the web"
+                                color: Theme.muted
+                                font.pixelSize: Theme.fontSm
+                                font.family: Theme.fontMono
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignHCenter
+                                text: search.text.trim().slice(1).trim() || "…"
+                                color: Theme.accentAlt
+                                font.pixelSize: Theme.fontLg
+                                font.weight: Theme.fontWeight
+                                font.family: Theme.fontUi
+                                elide: Text.ElideRight
                             }
                         }
                     }
@@ -253,8 +284,10 @@ Scope {
                     RowLayout {
                         Layout.fillWidth: true
                         Text {
-                            text: panel.calcMode ? "Enter copy result · Esc close"
-                                                 : "↑↓ move · Enter launch · Esc close"
+                            text: LauncherState.calcMode   ? "Enter copy result · Esc close"
+                                : LauncherState.webMode     ? "Enter search web · Esc close"
+                                : LauncherState.windowMode  ? "↑↓ move · Enter focus window · Esc close"
+                                :                             "↑↓ move · Enter launch · Esc close"
                             color: Theme.muted
                             font.pixelSize: Theme.fontXs
                             font.family: Theme.fontUi

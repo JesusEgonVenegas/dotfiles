@@ -1,6 +1,7 @@
 pragma Singleton
 import Quickshell
 import Quickshell.Io
+import Quickshell.Hyprland
 import QtQuick
 
 // Application launcher backed by Quickshell.DesktopEntries. Opened via the
@@ -16,6 +17,11 @@ Singleton {
     property bool   visible: false
     property string query: ""
     property var    counts: ({})   // desktop-entry id -> launch count
+    property var    windows: []    // open windows (populated on open, for "/" mode)
+
+    // Modes, chosen by the first character of the query.
+    readonly property bool webMode:    query.trim().charAt(0) === "?"
+    readonly property bool windowMode: query.trim().charAt(0) === "/"
 
     readonly property string stateDir:  Quickshell.env("HOME") + "/.local/state/quickshell"
     readonly property string usagePath: stateDir + "/launcher-usage.json"
@@ -43,6 +49,15 @@ Singleton {
     // Ranked filter: name-prefix > word-boundary > name-substring > other-fields.
     // Usage count breaks ties within a rank; empty query = pure usage-then-name.
     readonly property var filtered: {
+        // calc/web modes don't drive the list (they show a hint panel instead).
+        if (calcMode || webMode) return []
+        // window switcher: filter the preloaded open windows.
+        if (windowMode) {
+            const wq = query.trim().slice(1).trim().toLowerCase()
+            if (wq.length === 0) return windows
+            return windows.filter(w =>
+                (w.name + " " + w.genericName).toLowerCase().indexOf(wq) >= 0)
+        }
         const q = query.trim().toLowerCase()
         if (q.length === 0) return apps.slice().sort(byUsageThenName)
         const scored = []
@@ -62,19 +77,52 @@ Singleton {
         return scored.map(s => s.app)
     }
 
-    function open()   { query = ""; visible = true }
+    // ---- calculator mode: leading "=", evaluated by qalc (units/currency/etc) ----
+    readonly property bool calcMode: query.trim().charAt(0) === "="
+    property string calcResult: ""
+    onQueryChanged: { if (calcMode) calcTimer.restart(); else calcResult = "" }
+
+    function open()   { query = ""; calcResult = ""; clientsProc.running = true; visible = true }
     function close()  { visible = false; query = "" }
     function toggle() { if (visible) close(); else open() }
 
-    function launch(entry) {
-        if (!entry) return
-        // bump usage count and persist
+    // Launch an app entry OR focus an open window (window items carry .isWindow).
+    function launch(item) {
+        if (!item) return
+        if (item.isWindow) {
+            Hyprland.dispatch("focuswindow address:" + item.address)
+            close()
+            return
+        }
         var c = counts
-        c[entry.id] = (c[entry.id] || 0) + 1
+        c[item.id] = (c[item.id] || 0) + 1   // bump usage count and persist
         counts = c
         save()
-        entry.execute()   // handles Exec field codes, Terminal=true, etc.
+        item.execute()   // handles Exec field codes, Terminal=true, etc.
         close()
+    }
+
+    // "?" mode: open the default browser on a DuckDuckGo search.
+    function webSearch() {
+        const q = query.trim().slice(1).trim()
+        if (q.length === 0) { close(); return }
+        Quickshell.execDetached(["xdg-open", "https://duckduckgo.com/?q=" + encodeURIComponent(q)])
+        close()
+    }
+
+    function parseClients(text) {
+        try {
+            const arr = JSON.parse(text)
+            windows = arr
+                .filter(c => c && c.mapped && c.title && c.title.length > 0)
+                .map(c => ({
+                    isWindow: true,
+                    address: c.address,
+                    name: c.title,
+                    genericName: (c.class || "?") + "  ·  ws " + (c.workspace ? c.workspace.id : "?"),
+                    icon: (c.class || "").toLowerCase()
+                }))
+        } catch (e) { windows = [] }
     }
 
     // ---- persistence (Process-based, matching the rest of the shell) ----
@@ -98,4 +146,29 @@ Singleton {
         stdout: StdioCollector { onStreamFinished: root.parseCounts(text) }
     }
     Process { id: writeProc; command: ["true"] }
+
+    // qalc evaluation, debounced so we don't spawn one per keystroke.
+    Timer {
+        id: calcTimer
+        interval: 90
+        onTriggered: {
+            var expr = root.query.trim().slice(1).trim()
+                           .replace(/([0-9.]+%)\s+of\s+/gi, "$1 * ")  // "20% of 340" -> "20% * 340"
+            if (expr.length === 0) { root.calcResult = ""; return }
+            calcProc.command = ["qalc", "-t", expr]
+            calcProc.running = true
+        }
+    }
+    Process {
+        id: calcProc
+        command: ["true"]
+        stdout: StdioCollector { onStreamFinished: root.calcResult = text.trim() }
+    }
+
+    // Open windows for the "/" switcher, refreshed each time the launcher opens.
+    Process {
+        id: clientsProc
+        command: ["hyprctl", "clients", "-j"]
+        stdout: StdioCollector { onStreamFinished: root.parseClients(text) }
+    }
 }

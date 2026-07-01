@@ -13,12 +13,20 @@ Scope {
     ScreenshotPopup {}
     RecordMenuPopup {}
     LauncherPopup {}
+    QuickIdeaPopup {}
 
     // Super+D (bound in hyprland.conf: `global, quickshell:launcher`)
     GlobalShortcut {
         appid: "quickshell"
         name: "launcher"
         onPressed: LauncherState.toggle()
+    }
+
+    // Super+Shift+I (bound in hyprland.conf: `global, quickshell:quickidea`)
+    GlobalShortcut {
+        appid: "quickshell"
+        name: "quickidea"
+        onPressed: QuickIdeaState.toggle()
     }
 
     // Super+Shift+V (bound in hyprland.conf: `global, quickshell:clipboard`)
