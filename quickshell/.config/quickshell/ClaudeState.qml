@@ -28,6 +28,34 @@ Singleton {
     property real peakTokens: 0  // largest closed 5h block seen — self-calibrates thresholds
     property double resetAt: 0   // epoch the open 5h block resets (0 when idle)
 
+    // --- Low-headroom alert -------------------------------------------------
+    // Fire one desktop notification per 5h block when consumption crosses ~95%
+    // of the calibrated peak, so you get a heads-up before hitting the wall
+    // mid-task. Keyed on resetAt (unique per block) so it never repeats within
+    // a block. Needs a closed block to calibrate against (peakTokens > 0).
+    property double lastAlertReset: 0
+    function fmtTokShort(n) {
+        return n >= 1e6 ? (n / 1e6).toFixed(1) + "M"
+             : n >= 1e3 ? Math.round(n / 1e3) + "k" : ("" + Math.round(n))
+    }
+    function fmtDurShort(s) {
+        s = Math.max(0, Math.round(s))
+        var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
+        return h > 0 ? h + "h" + (m < 10 ? "0" : "") + m + "m" : (m > 0 ? m + "m" : "<1m")
+    }
+    function maybeAlert() {
+        if (resetAt <= 0 || peakTokens <= 0) return
+        if (winTokens < peakTokens * 0.95) return
+        if (resetAt === lastAlertReset) return   // already alerted this block
+        lastAlertReset = resetAt
+        const left = resetAt - (Date.now() / 1000)
+        Quickshell.execDetached([
+            "notify-send", "-a", "Claude Code", "-i", "dialog-warning",
+            "Approaching 5h rate limit",
+            fmtTokShort(winTokens) + " used this block · resets in " + fmtDurShort(left)
+        ])
+    }
+
     // Sessions needing attention. "action" = must be answered (permission
     // prompt); "done" = finished/idle, informational (auto-clears on visit).
     readonly property var waiting: sessions.filter(
@@ -114,6 +142,7 @@ Singleton {
                 root.weekTokens = u.week || 0
                 root.peakTokens = u.peak || 0
                 root.resetAt    = u.reset || 0
+                root.maybeAlert()
             } catch (e) {}
         } }
     }
