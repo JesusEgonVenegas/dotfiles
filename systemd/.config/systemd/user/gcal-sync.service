@@ -1,0 +1,8 @@
+[Unit]
+Description=Mirror Google Calendar into local .ics for khal
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python %h/.config/quickshell/scripts/gcal-sync.py
