@@ -33,7 +33,11 @@ Singleton {
     // of the calibrated peak, so you get a heads-up before hitting the wall
     // mid-task. Keyed on resetAt (unique per block) so it never repeats within
     // a block. Needs a closed block to calibrate against (peakTokens > 0).
-    property double lastAlertReset: 0
+    // Two escalating levels, each fired at most once per block:
+    //   warn (~85% of peak) — a normal 5s heads-up
+    //   crit (~95% of peak) — a critical, sticky toast to wrap up
+    property double lastWarnReset: 0
+    property double lastCritReset: 0
     function fmtTokShort(n) {
         return n >= 1e6 ? (n / 1e6).toFixed(1) + "M"
              : n >= 1e3 ? Math.round(n / 1e3) + "k" : ("" + Math.round(n))
@@ -43,17 +47,30 @@ Singleton {
         var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60)
         return h > 0 ? h + "h" + (m < 10 ? "0" : "") + m + "m" : (m > 0 ? m + "m" : "<1m")
     }
+    function fireAlert(urgency, icon, title, body) {
+        Quickshell.execDetached([
+            "notify-send", "-a", "Claude Code", "-u", urgency, "-i", icon, title, body
+        ])
+    }
     function maybeAlert() {
         if (resetAt <= 0 || peakTokens <= 0) return
-        if (winTokens < peakTokens * 0.95) return
-        if (resetAt === lastAlertReset) return   // already alerted this block
-        lastAlertReset = resetAt
-        const left = resetAt - (Date.now() / 1000)
-        Quickshell.execDetached([
-            "notify-send", "-a", "Claude Code", "-i", "dialog-warning",
-            "Approaching 5h rate limit",
-            fmtTokShort(winTokens) + " used this block · resets in " + fmtDurShort(left)
-        ])
+        const used = fmtTokShort(winTokens)
+        const left = fmtDurShort(resetAt - (Date.now() / 1000))
+        // Critical first — if we jumped straight past both, skip the warn.
+        if (winTokens >= peakTokens * 0.95) {
+            if (resetAt === lastCritReset) return
+            lastCritReset = resetAt
+            lastWarnReset = resetAt
+            fireAlert("critical", "dialog-error", "5h rate limit nearly reached",
+                      used + " used · resets in " + left + " — consider wrapping up")
+            return
+        }
+        if (winTokens >= peakTokens * 0.85) {
+            if (resetAt === lastWarnReset) return
+            lastWarnReset = resetAt
+            fireAlert("normal", "dialog-warning", "Approaching 5h rate limit",
+                      used + " used this block · resets in " + left)
+        }
     }
 
     // Sessions needing attention. "action" = must be answered (permission
