@@ -1,31 +1,62 @@
 #!/usr/bin/env bash
-# Sum Claude "effective token" consumption over a rolling 5h window and since
-# local midnight, across recent transcripts. Cache reads are weighted x0.1 (as
-# in pricing) so long cached sessions don't wildly inflate the number.
-# Output: {"win":<tokens_5h>,"day":<tokens_today>}. Consumed by ClaudeState.qml.
+# Effective-token consumption for Claude Code, tuned for a Max plan: cost is
+# flat, so the number that matters is rate-limit pressure. Anthropic meters in
+# fixed ~5h blocks — a block opens on your first message and resets exactly 5h
+# later — so we reconstruct those blocks instead of a naive trailing sum.
+#
+# Emits JSON consumed by ClaudeState.qml:
+#   win   effective tokens in the current *open* 5h block (0 when idle)
+#   reset epoch when the open block resets (0 when no block is open)
+#   day   effective tokens since local midnight
+#   week  effective tokens over the last 7 days
+#   peak  largest *closed* 5h block ever seen — self-calibrates the warn/crit
+#         thresholds so we don't rely on guessed limits (0 until one closes)
+#
+# Cache reads are weighted x0.1 (as in pricing) so long cached sessions don't
+# wildly inflate the totals.
 set -uo pipefail
 shopt -s nullglob
 
 now=$(date +%s)
-cut5h=$(( now - 18000 ))
-midnight=$(date -d 'today 00:00:00' +%s 2>/dev/null || echo "$cut5h")
-oldest=$cut5h; [ "$midnight" -lt "$oldest" ] && oldest=$midnight
+week_cut=$(( now - 604800 ))                                   # 7 days
+midnight=$(date -d 'today 00:00:00' +%s 2>/dev/null || echo "$week_cut")
 
-win=0; day=0
+tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+
+# (epoch, effective_tokens) for every usage-bearing message in the last 7 days.
 for f in "$HOME/.claude/projects"/*/*.jsonl; do
     mt=$(stat -c %Y "$f" 2>/dev/null || echo 0)
-    [ "$mt" -lt "$oldest" ] && continue
-    while IFS=$'\t' read -r ts tok; do
-        [ -z "${ts:-}" ] && continue
-        (( ts >= cut5h ))    && win=$(( win + tok ))
-        (( ts >= midnight )) && day=$(( day + tok ))
-    done < <(jq -r '
+    [ "$mt" -lt "$week_cut" ] && continue
+    jq -r '
         select(.message.usage and .timestamp)
         | [ ((.timestamp | sub("\\.[0-9]+Z$";"Z")) | fromdateiso8601),
             (.message.usage
              | (.input_tokens + .output_tokens
                 + (.cache_creation_input_tokens // 0)
                 + ((.cache_read_input_tokens // 0) / 10 | floor))) ]
-        | @tsv' "$f" 2>/dev/null)
-done
-printf '{"win":%d,"day":%d}\n' "$win" "$day"
+        | @tsv' "$f" 2>/dev/null
+done > "$tmp"
+
+# Fold the time-sorted stream into 5h blocks. day/week are simple rollups; the
+# block walk yields the current open block (win/reset) and the peak closed block.
+sort -k1,1n "$tmp" | awk -v now="$now" -v mid="$midnight" -v wk="$week_cut" '
+    BEGIN { FS="\t"; blk=18000; bstart=0; bsum=0; peak=0 }
+    {
+        ts=$1; tok=$2; if (ts=="") next
+        if (ts>=mid) day+=tok
+        if (ts>=wk)  week+=tok
+        # New block when none is open or this message lands past the 5h reset.
+        if (bstart==0 || ts>=bstart+blk) {
+            if (bstart>0 && bsum>peak) peak=bsum   # close previous block
+            bstart=ts; bsum=0
+        }
+        bsum+=tok
+    }
+    END {
+        win=0; reset=0
+        if (bstart>0 && now < bstart+blk) { win=bsum; reset=bstart+blk }  # still open
+        else if (bsum>peak) peak=bsum                                     # last block closed
+        printf "{\"win\":%d,\"reset\":%d,\"day\":%d,\"week\":%d,\"peak\":%d}\n", \
+               win, reset, day, week, peak
+    }
+'

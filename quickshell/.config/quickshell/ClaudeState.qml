@@ -22,8 +22,11 @@ Singleton {
     property real totalCost: 0
 
     // Effective-token consumption (cache reads weighted x0.1), from cc-usage.sh.
-    property real winTokens: 0   // rolling 5h  — proxy for Max rate-limit pressure
+    property real winTokens: 0   // current open 5h block — proxy for Max rate-limit pressure
     property real dayTokens: 0   // since local midnight
+    property real weekTokens: 0  // last 7 days — the Max weekly cap often binds first
+    property real peakTokens: 0  // largest closed 5h block seen — self-calibrates thresholds
+    property double resetAt: 0   // epoch the open 5h block resets (0 when idle)
 
     // Sessions needing attention. "action" = must be answered (permission
     // prompt); "done" = finished/idle, informational (auto-clears on visit).
@@ -104,8 +107,14 @@ Singleton {
         id: usageProc
         command: [Quickshell.env("HOME") + "/.config/quickshell/scripts/cc-usage.sh"]
         stdout: StdioCollector { onStreamFinished: {
-            try { const u = JSON.parse(text); root.winTokens = u.win || 0; root.dayTokens = u.day || 0 }
-            catch (e) {}
+            try {
+                const u = JSON.parse(text)
+                root.winTokens  = u.win  || 0
+                root.dayTokens  = u.day  || 0
+                root.weekTokens = u.week || 0
+                root.peakTokens = u.peak || 0
+                root.resetAt    = u.reset || 0
+            } catch (e) {}
         } }
     }
     Timer { interval: 120000; running: true; repeat: true; triggeredOnStart: true; onTriggered: usageProc.running = true }
