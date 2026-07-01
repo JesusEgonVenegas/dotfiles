@@ -21,6 +21,10 @@ Singleton {
     // statusLine script writing per-session cost files under cost/).
     property real totalCost: 0
 
+    // Effective-token consumption (cache reads weighted x0.1), from cc-usage.sh.
+    property real winTokens: 0   // rolling 5h  — proxy for Max rate-limit pressure
+    property real dayTokens: 0   // since local midnight
+
     // Sessions needing attention. "action" = must be answered (permission
     // prompt); "done" = finished/idle, informational (auto-clears on visit).
     readonly property var waiting: sessions.filter(
@@ -94,4 +98,15 @@ Singleton {
         stdout: StdioCollector { onStreamFinished: root.totalCost = parseFloat(text.trim()) || 0 }
     }
     Timer { interval: 30000; running: true; repeat: true; onTriggered: costProc.running = true }
+
+    // Rolling-window + daily token totals (heavier transcript scan → slow timer).
+    Process {
+        id: usageProc
+        command: [Quickshell.env("HOME") + "/.config/quickshell/scripts/cc-usage.sh"]
+        stdout: StdioCollector { onStreamFinished: {
+            try { const u = JSON.parse(text); root.winTokens = u.win || 0; root.dayTokens = u.day || 0 }
+            catch (e) {}
+        } }
+    }
+    Timer { interval: 120000; running: true; repeat: true; triggeredOnStart: true; onTriggered: usageProc.running = true }
 }
