@@ -13,32 +13,39 @@ Scope {
             screen: modelData
             visible: VolumeState.popupOpen
 
-            anchors { top: true; right: true }
-            margins {
-                right: {
+            // Full-screen transparent overlay so a click anywhere outside the
+            // card is caught and dismisses the popup (matches ClipboardPopup).
+            anchors { top: true; bottom: true; left: true; right: true }
+            exclusiveZone: -1
+            color: "transparent"
+
+            // Click-away closer, behind the card.
+            MouseArea { anchors.fill: parent; onClicked: VolumeState.popupOpen = false }
+
+            // ── Card ──────────────────────────────────────────────────────
+            Rectangle {
+                id: card
+                width: 290
+                implicitHeight: col.implicitHeight + 24
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: Theme.barHeight + 6
+                anchors.rightMargin: {
                     const sw = modelData.width
                     const pw = 290
                     const cx = VolumeState.triggerX - modelData.x
                     if (cx <= 0) return 10
                     return Math.max(6, Math.min(sw - pw - 6, sw - cx - pw / 2))
                 }
-            }
-
-            color: "transparent"
-            implicitWidth: 290
-            implicitHeight: card.implicitHeight
-
-            // ── Card ──────────────────────────────────────────────────────
-            Rectangle {
-                id: card
-                width: parent.width
-                implicitHeight: col.implicitHeight + 24
                 radius: Theme.radiusLg
                 color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.97)
                 border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
                 border.width: 1
 
                 layer.enabled: true
+
+                // Swallow clicks on the card so they don't reach the closer behind.
+                MouseArea { anchors.fill: parent }
 
                 ColumnLayout {
                     id: col
@@ -273,12 +280,6 @@ Scope {
                 }
             }
 
-            // Close when clicking the bar area (outside the popup card)
-            MouseArea {
-                anchors.fill: parent
-                z: -1
-                onClicked: VolumeState.popupOpen = false
-            }
         }
     }
 }
