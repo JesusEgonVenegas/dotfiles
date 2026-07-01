@@ -57,9 +57,42 @@ if   [ "${ctxk:-0}" -ge 170 ]; then ctxc="$Rd"; hint="  ${Rd}· /clear?${R}"
 elif [ "${ctxk:-0}" -ge 120 ]; then ctxc="$A";  hint=""
 else                                ctxc="$D";  hint=""; fi
 
+# Account-wide 5h rate-limit usage, cached by the bar's cc-usage.sh (too heavy
+# to recompute here every render). Replaces the flat-rate $ figure: on a Max
+# plan what matters is block consumption + when it resets. Colored against your
+# own peak block so it self-calibrates; segment is omitted when idle/no cache.
+useg=""
+ucache="${XDG_STATE_HOME:-$HOME/.local/state}/cc-bar/usage.json"
+if [ -f "$ucache" ]; then
+    read -r uwin ureset upeak < <(jq -r '"\(.win // 0) \(.reset // 0) \(.peak // 0)"' "$ucache" 2>/dev/null)
+    [[ "$uwin"   =~ ^[0-9]+$ ]] || uwin=0
+    [[ "$ureset" =~ ^[0-9]+$ ]] || ureset=0
+    [[ "$upeak"  =~ ^[0-9]+$ ]] || upeak=0
+    if [ "$uwin" -gt 0 ]; then
+        uwinf="$(awk -v n="$uwin" 'BEGIN{ if(n>=1e6) printf "%.1fM",n/1e6; else if(n>=1000) printf "%dk",int(n/1000+0.5); else printf "%d",n }')"
+        uc="$D"
+        if [ "$upeak" -gt 0 ]; then
+            if   [ "$uwin" -ge $(( upeak * 95 / 100 )) ]; then uc="$Rd"
+            elif [ "$uwin" -ge $(( upeak * 3 / 4 )) ];    then uc="$A"; fi
+        fi
+        rseg=""
+        if [ "$ureset" -gt 0 ]; then
+            left=$(( ureset - $(date +%s) ))
+            if [ "$left" -gt 0 ]; then
+                rh=$(( left / 3600 )); rm=$(( (left % 3600) / 60 ))
+                if [ "$rh" -gt 0 ]; then rseg="$(printf ' ↻%dh%02dm' "$rh" "$rm")"
+                else                     rseg="$(printf ' ↻%dm' "$rm")"; fi
+            fi
+        fi
+        useg="${uc}5h ${uwinf}${R}${D}${rseg}${R}"
+    fi
+fi
+
 line="${G}${proj}${R}"
 [ -n "$branch" ] && line="$line  ${D} ${branch}${R}"
-line="$line  ${D}${model}${R}  ${A}\$$(printf '%.2f' "${cost:-0}")${R}  ${ctxc}ctx ${ctxk}k${R}"
+line="$line  ${D}${model}${R}"
+[ -n "$useg" ] && line="$line  $useg"
+line="$line  ${ctxc}ctx ${ctxk}k${R}"
 [ "${dur_min:-0}" -gt 0 ] && line="$line  ${D}⧗ ${dur_min}m${R}"
 if [ "${lines_add:-0}" -gt 0 ] || [ "${lines_rem:-0}" -gt 0 ]; then
     line="$line  ${G}+${lines_add}${R} ${Rd}-${lines_rem}${R}"

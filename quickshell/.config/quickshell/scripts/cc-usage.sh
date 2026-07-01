@@ -39,7 +39,7 @@ done > "$tmp"
 
 # Fold the time-sorted stream into 5h blocks. day/week are simple rollups; the
 # block walk yields the current open block (win/reset) and the peak closed block.
-sort -k1,1n "$tmp" | awk -v now="$now" -v mid="$midnight" -v wk="$week_cut" '
+result="$(sort -k1,1n "$tmp" | awk -v now="$now" -v mid="$midnight" -v wk="$week_cut" '
     BEGIN { FS="\t"; blk=18000; bstart=0; bsum=0; peak=0 }
     {
         ts=$1; tok=$2; if (ts=="") next
@@ -59,4 +59,16 @@ sort -k1,1n "$tmp" | awk -v now="$now" -v mid="$midnight" -v wk="$week_cut" '
         printf "{\"win\":%d,\"reset\":%d,\"day\":%d,\"week\":%d,\"peak\":%d}\n", \
                win, reset, day, week, peak
     }
-'
+')"
+
+# Cache the result so cheap, high-frequency readers (the terminal statusLine)
+# can show 5h usage without paying the full transcript scan on every render.
+cache="${XDG_STATE_HOME:-$HOME/.local/state}/cc-bar/usage.json"
+mkdir -p "${cache%/*}"
+if printf '%s\n' "$result" > "$cache.tmp.$$" 2>/dev/null; then
+    mv -f "$cache.tmp.$$" "$cache"
+else
+    rm -f "$cache.tmp.$$"
+fi
+
+printf '%s\n' "$result"

@@ -85,7 +85,7 @@ Item {
         // Time until the current block resets (frees up rate-limit headroom).
         Text {
             visible: root.resetLeft > 0
-            text: "⧗" + root.fmtDur(root.resetLeft)
+            text: "↻" + root.fmtDur(root.resetLeft)
             color: Theme.muted
             font.pixelSize: Theme.fontXs
             font.family: Theme.fontUi
