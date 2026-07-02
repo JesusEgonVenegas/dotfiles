@@ -177,9 +177,16 @@ Singleton {
     // before a timed event starts. Runs whether or not the panel is open, and
     // refreshes the event cache every ~5 min so it stays current. All-day events
     // are skipped (no useful ping time).
-    property int reminderLeadMin: 10
+    property int reminderLeadMin: 10   // timed events: ping this many min before
+    property int allDayHour: 9         // all-day events: ping at this hour, morning-of
     property var notifiedUids: ({})
     property int reminderRefreshTicks: 0
+
+    // Local ms for a "YYYY-MM-DD" at a given hour (hour 24 → next midnight).
+    function dayMs(dateStr, hour) {
+        const d = dateStr.split("-")
+        return new Date(+d[0], +d[1] - 1, +d[2], hour, 0, 0).getTime()
+    }
 
     function eventStartMs(ev) {
         if (!ev.time || ev.time.length === 0) return 0
@@ -195,14 +202,26 @@ Singleton {
         const leadMs = reminderLeadMin * 60000
         for (let i = 0; i < events.length; i++) {
             const ev = events[i]
-            const s = eventStartMs(ev)
-            if (s === 0) continue
-            const delta = s - now
-            if (delta > 0 && delta <= leadMs && !notifiedUids[ev.uid]) {
-                notifiedUids[ev.uid] = true
-                const mins = Math.max(1, Math.round(delta / 60000))
-                Quickshell.execDetached(["notify-send", "-a", "Calendar", "-u", "normal",
-                    ev.title, "in " + mins + " min · " + ev.time])
+            if (ev.time && ev.time.length > 0) {
+                // Timed event: ping leadMin before it starts.
+                const delta = eventStartMs(ev) - now
+                if (delta > 0 && delta <= leadMs && !notifiedUids[ev.uid]) {
+                    notifiedUids[ev.uid] = true
+                    const mins = Math.max(1, Math.round(delta / 60000))
+                    Quickshell.execDetached(["notify-send", "-a", "Calendar", "-u", "normal",
+                        ev.title, "in " + mins + " min · " + ev.time])
+                }
+            } else if (ev.date) {
+                // All-day event: one ping in the morning-of (catch-up if the
+                // session starts later the same day; never fires once the day
+                // has passed). Keyed separately so it can't clash with timed.
+                const key = "allday:" + ev.uid
+                if (now >= dayMs(ev.date, allDayHour) && now < dayMs(ev.date, 24)
+                        && !notifiedUids[key]) {
+                    notifiedUids[key] = true
+                    Quickshell.execDetached(["notify-send", "-a", "Calendar", "-u", "normal",
+                        ev.title, "All day today"])
+                }
             }
         }
     }
