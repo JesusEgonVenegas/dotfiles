@@ -1,4 +1,5 @@
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Services.Pipewire
 import Quickshell.Io
 import QtQuick
@@ -11,7 +12,7 @@ Scope {
         PanelWindow {
             required property var modelData
             screen: modelData
-            visible: VolumeState.popupOpen
+            visible: VolumeState.popupOpen && Hyprland.focusedMonitor?.name === modelData.name
 
             // Full-screen transparent overlay so a click anywhere outside the
             // card is caught and dismisses the popup (matches ClipboardPopup).
@@ -57,6 +58,29 @@ Scope {
                     }
                     spacing: 0
 
+                    // ── Derived Pipewire state (re-evaluates as nodes change) ──
+                    // The EasyEffects virtual "clean mic" source, present only
+                    // while EasyEffects runs its input chain.
+                    readonly property var eeSource: !Pipewire.ready ? null
+                        : (Pipewire.nodes.values.find(n => n.name === "easyeffects_source") || null)
+
+                    // First real hardware/virtual input that isn't EasyEffects —
+                    // where the Studio FX toggle drops back to for "raw".
+                    readonly property var rawInput: !Pipewire.ready ? null
+                        : (Pipewire.nodes.values.find(n =>
+                            n.audio !== null && !n.isStream && !n.isSink
+                            && n.name !== "easyeffects_source") || null)
+
+                    readonly property bool studioActive:
+                        Pipewire.defaultAudioSource?.name === "easyeffects_source"
+
+                    // Apps currently playing into a sink (per-app volume list).
+                    readonly property var appStreams: !Pipewire.ready ? []
+                        : Pipewire.nodes.values.filter(n =>
+                            n.isStream
+                            && n.properties
+                            && n.properties["media.class"] === "Stream/Output/Audio")
+
                     // ── Header row ─────────────────────────────────────────
                     RowLayout {
                         Layout.fillWidth: true
@@ -73,7 +97,8 @@ Scope {
 
                         Item { Layout.fillWidth: true }
 
-                        // Mute toggle
+                        // Mute toggle — see Volume.toggleMute() for why this
+                        // goes through pactl instead of a direct property write.
                         Text {
                             text: Volume.muted ? "󰖁" : "󰕾"
                             color: Volume.muted ? Theme.muted : Theme.accent
@@ -82,11 +107,9 @@ Scope {
 
                             MouseArea {
                                 anchors.fill: parent
+                                anchors.margins: -8
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (Volume.sink && Volume.sink.audio)
-                                        Volume.sink.audio.muted = !Volume.sink.audio.muted
-                                }
+                                onClicked: Volume.toggleMute()
                             }
                         }
                     }
@@ -152,13 +175,8 @@ Scope {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.SizeHorCursor
-                                function apply(mx) {
-                                    var f = Math.max(0, Math.min(1, mx / parent.width))
-                                    if (Volume.sink && Volume.sink.audio)
-                                        Volume.sink.audio.volume = f
-                                }
-                                onClicked: mouse => apply(mouse.x)
-                                onPositionChanged: mouse => { if (pressed) apply(mouse.x) }
+                                onClicked: mouse => Volume.setVolume(mouse.x / parent.width)
+                                onPositionChanged: mouse => { if (pressed) Volume.setVolume(mouse.x / parent.width) }
                             }
                         }
 
@@ -207,7 +225,7 @@ Scope {
                             return Pipewire.nodes.values.filter(n => {
                                 if (n.audio === null || n.isStream) return false
                                 if (!OUTPUT_PREFIXES.some(p => n.name.startsWith(p))) return false
-                                const key = n.description || n.name
+                                const key = n.nickname || n.description || n.name
                                 if (seen.has(key)) return false
                                 seen.add(key)
                                 return true
@@ -245,7 +263,7 @@ Scope {
                                 }
 
                                 Text {
-                                    text: modelData.description || modelData.name
+                                    text: modelData.nickname || modelData.description || modelData.name
                                     color: isDefault ? Theme.accent : Theme.fg
                                     font.pixelSize: Theme.fontSm
                                     font.family: Theme.fontUi
@@ -274,6 +292,412 @@ Scope {
                                 // reliable than wpctl for profile switching.
                                 command: ["pactl", "set-default-sink", modelData.name]
                                 onRunningChanged: if (!running) Volume.refresh()
+                            }
+                        }
+                    }
+
+                    // ── Divider ────────────────────────────────────────────
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.08)
+                        Layout.topMargin: 14
+                        Layout.bottomMargin: 10
+                    }
+
+                    // ── Microphone header row ──────────────────────────────
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 10
+
+                        Text {
+                            text: "Microphone"
+                            color: Theme.muted
+                            font.pixelSize: Theme.fontXs
+                            font.family: Theme.fontUi
+                            font.capitalization: Font.AllUppercase
+                            font.letterSpacing: 1
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        // Mic mute toggle — pactl-routed, see Volume.toggleMicMute().
+                        Text {
+                            text: Volume.micMuted ? "󰍭" : "󰍬"
+                            color: Volume.micMuted ? Theme.danger : Theme.accent
+                            font.pixelSize: Theme.fontMd
+                            font.family: Theme.fontMono
+
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -8
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Volume.toggleMicMute()
+                            }
+                        }
+                    }
+
+                    // ── Mic volume slider ──────────────────────────────────
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 8
+                        spacing: 10
+
+                        Text {
+                            text: Volume.micMuted ? "󰍭" : "󰍬"
+                            color: Volume.micMuted ? Theme.muted : Theme.accent
+                            font.pixelSize: Theme.fontLg
+                            font.family: Theme.fontMono
+                        }
+
+                        Item {
+                            id: micTrack
+                            Layout.fillWidth: true
+                            height: 20
+
+                            property real fraction: Volume.micVolume / 100
+
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width
+                                height: 4
+                                radius: 2
+                                color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.10)
+
+                                Rectangle {
+                                    width: parent.width * micTrack.fraction
+                                    height: parent.height
+                                    radius: parent.radius
+                                    color: Theme.accent
+                                    Behavior on width { SmoothedAnimation { velocity: 200 } }
+                                }
+                            }
+
+                            Rectangle {
+                                width: 14; height: 14; radius: 7
+                                color: Theme.accent
+                                y: (parent.height - height) / 2
+                                x: micTrack.fraction * (parent.width - width)
+                                Behavior on x { SmoothedAnimation { velocity: 200 } }
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.SizeHorCursor
+                                onClicked: mouse => Volume.setMicVolume(mouse.x / parent.width)
+                                onPositionChanged: mouse => { if (pressed) Volume.setMicVolume(mouse.x / parent.width) }
+                            }
+                        }
+
+                        Text {
+                            text: Volume.micVolume + "%"
+                            color: Theme.fg
+                            font.pixelSize: Theme.fontSm
+                            font.family: Theme.fontMono
+                            Layout.preferredWidth: 34
+                            horizontalAlignment: Text.AlignRight
+                        }
+                    }
+
+                    // ── Live input level meter ─────────────────────────────
+                    // Peak from MicLevel (parec + mic-level.py) while the popup
+                    // is open — set the MixPre gain knob so speech peaks land in
+                    // the green/amber and hard peaks (red) stay rare.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 14
+                        spacing: 10
+
+                        Text {
+                            text: "level"
+                            color: Theme.muted
+                            font.pixelSize: Theme.fontXs
+                            font.family: Theme.fontUi
+                            Layout.preferredWidth: 24
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 6
+                            radius: 3
+                            color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.10)
+
+                            Rectangle {
+                                width: parent.width * Math.min(1, MicLevel.level / 100)
+                                height: parent.height
+                                radius: parent.radius
+                                color: MicLevel.level > 88 ? Theme.danger
+                                     : MicLevel.level > 62 ? Theme.busy
+                                     : Theme.accent
+                                Behavior on width { SmoothedAnimation { velocity: 400 } }
+                            }
+                        }
+
+                        Text {
+                            text: Math.round(MicLevel.level)
+                            color: Theme.muted
+                            font.pixelSize: Theme.fontXs
+                            font.family: Theme.fontMono
+                            Layout.preferredWidth: 34
+                            horizontalAlignment: Text.AlignRight
+                        }
+                    }
+
+                    // ── Studio FX toggle ───────────────────────────────────
+                    // Flips the default source between the raw hardware mic and
+                    // the EasyEffects "clean mic" (gate/RNNoise/EQ/comp). Only
+                    // shown when EasyEffects is actually running its input chain.
+                    Rectangle {
+                        visible: col.eeSource !== null
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: 12
+                        implicitHeight: 32
+                        radius: Theme.radiusSm
+                        color: col.studioActive
+                               ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+                               : fxHov.hovered
+                                 ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.05)
+                                 : "transparent"
+                        border.width: 1
+                        border.color: col.studioActive
+                                      ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.30)
+                                      : "transparent"
+                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            spacing: 8
+
+                            Rectangle {
+                                width: 8; height: 8; radius: 4
+                                color: col.studioActive ? Theme.accent : Theme.muted
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+
+                            Text {
+                                text: "Studio FX  ·  EasyEffects"
+                                color: col.studioActive ? Theme.accent : Theme.fg
+                                font.pixelSize: Theme.fontSm
+                                font.family: Theme.fontUi
+                                Layout.fillWidth: true
+                            }
+
+                            Text {
+                                text: col.studioActive ? "ON" : "OFF"
+                                color: col.studioActive ? Theme.accent : Theme.muted
+                                font.pixelSize: Theme.fontXs
+                                font.family: Theme.fontMono
+                            }
+                        }
+
+                        HoverHandler { id: fxHov; cursorShape: Qt.PointingHandCursor }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                if (col.studioActive) {
+                                    if (col.rawInput) Volume.setSource(col.rawInput.name)
+                                } else {
+                                    Volume.setSource("easyeffects_source")
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Input devices header ───────────────────────────────
+                    Text {
+                        text: "Input Devices"
+                        color: Theme.muted
+                        font.pixelSize: Theme.fontXs
+                        font.family: Theme.fontUi
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        Layout.bottomMargin: 6
+                    }
+
+                    // ── Source list ────────────────────────────────────────
+                    Repeater {
+                        model: {
+                            if (!Pipewire.ready) return []
+                            // A "source" is an audio node that is neither a
+                            // playback stream nor a sink — this naturally
+                            // includes virtual sources like easyeffects_source
+                            // while excluding sink monitors.
+                            const seen = new Set()
+                            return Pipewire.nodes.values.filter(n => {
+                                if (n.audio === null || n.isStream || n.isSink) return false
+                                const key = n.nickname || n.description || n.name
+                                if (seen.has(key)) return false
+                                seen.add(key)
+                                return true
+                            })
+                        }
+
+                        delegate: Rectangle {
+                            required property var modelData
+
+                            Layout.fillWidth: true
+                            implicitHeight: 34
+                            radius: Theme.radiusSm
+
+                            property bool isDefault: modelData.id === Pipewire.defaultAudioSource?.id
+
+                            color: isDefault
+                                   ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+                                   : srcHov.hovered
+                                     ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.05)
+                                     : "transparent"
+
+                            Behavior on color { ColorAnimation { duration: 150 } }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                spacing: 8
+
+                                Text {
+                                    text: "󰍬"
+                                    color: isDefault ? Theme.accent : Theme.muted
+                                    font.pixelSize: Theme.fontMd
+                                    font.family: Theme.fontMono
+                                }
+
+                                Text {
+                                    text: modelData.nickname || modelData.description || modelData.name
+                                    color: isDefault ? Theme.accent : Theme.fg
+                                    font.pixelSize: Theme.fontSm
+                                    font.family: Theme.fontUi
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            HoverHandler { id: srcHov; cursorShape: Qt.PointingHandCursor }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    // Optimistic: point Volume at the new source
+                                    // so the mic slider tracks it without waiting
+                                    // for PipeWire to propagate the default.
+                                    Volume.source = modelData
+                                    Volume.refreshMic()
+                                    Volume.setSource(modelData.name)
+                                }
+                            }
+                        }
+                    }
+
+                    // ── Applications (per-app playback) ────────────────────
+                    // Tracked so each stream's audio iface binds (non-null),
+                    // letting the sliders read/write volume directly.
+                    PwObjectTracker { objects: col.appStreams }
+
+                    Rectangle {
+                        visible: col.appStreams.length > 0
+                        Layout.fillWidth: true
+                        height: 1
+                        color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.08)
+                        Layout.topMargin: 12
+                        Layout.bottomMargin: 10
+                    }
+
+                    Text {
+                        visible: col.appStreams.length > 0
+                        text: "Applications"
+                        color: Theme.muted
+                        font.pixelSize: Theme.fontXs
+                        font.family: Theme.fontUi
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        Layout.bottomMargin: 6
+                    }
+
+                    Repeater {
+                        model: col.appStreams
+
+                        delegate: RowLayout {
+                            required property var modelData
+
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 30
+                            spacing: 8
+
+                            readonly property var au: modelData.audio
+                            readonly property bool appMuted: au ? au.muted : false
+                            readonly property real appFrac: au ? au.volume : 0
+
+                            // Prefer the human app name from stream properties,
+                            // fall back to node description/name.
+                            readonly property string appName: {
+                                const p = modelData.properties
+                                return (p && (p["application.name"] || p["media.name"]))
+                                       || modelData.description || modelData.name
+                            }
+
+                            Text {
+                                text: parent.appMuted ? "󰝟" : "󰕾"
+                                color: parent.appMuted ? Theme.muted : Theme.busy
+                                font.pixelSize: Theme.fontSm
+                                font.family: Theme.fontMono
+                                Layout.preferredWidth: 18
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    anchors.margins: -4
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: if (parent.parent.au) parent.parent.au.muted = !parent.parent.au.muted
+                                }
+                            }
+
+                            Text {
+                                text: parent.appName
+                                color: Theme.fg
+                                font.pixelSize: Theme.fontXs
+                                font.family: Theme.fontUi
+                                elide: Text.ElideRight
+                                Layout.preferredWidth: 90
+                            }
+
+                            Item {
+                                id: appTrack
+                                Layout.fillWidth: true
+                                height: 16
+
+                                Rectangle {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width
+                                    height: 4
+                                    radius: 2
+                                    color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.10)
+
+                                    Rectangle {
+                                        width: parent.width * Math.min(1, appTrack.parent.appFrac)
+                                        height: parent.height
+                                        radius: parent.radius
+                                        color: Theme.busy
+                                        Behavior on width { SmoothedAnimation { velocity: 300 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.SizeHorCursor
+                                    onPressed: mouse => { if (appTrack.parent.au) appTrack.parent.au.volume = Math.max(0, Math.min(1, mouse.x / width)) }
+                                    onPositionChanged: mouse => { if (pressed && appTrack.parent.au) appTrack.parent.au.volume = Math.max(0, Math.min(1, mouse.x / width)) }
+                                }
+                            }
+
+                            Text {
+                                text: Math.round(parent.appFrac * 100) + "%"
+                                color: Theme.muted
+                                font.pixelSize: Theme.fontXs
+                                font.family: Theme.fontMono
+                                Layout.preferredWidth: 34
+                                horizontalAlignment: Text.AlignRight
                             }
                         }
                     }
