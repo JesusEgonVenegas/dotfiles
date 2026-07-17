@@ -25,6 +25,10 @@ Singleton {
     // Last non-"flat" preset, so the bar EQ toggle knows which curve to restore
     // when flipping EQ back on.
     property string eqLastActive: "gpro-x"
+    // The hardware input EasyEffects reads from (its pinned input device). Used
+    // by MicLevel to meter the real mic even while Studio FX makes the default
+    // source the virtual easyeffects_source. Read once from EE's config.
+    property string eeInputDevice: ""
 
     PwObjectTracker {
         objects: {
@@ -180,6 +184,16 @@ Singleton {
                 }
             }
         }
+    }
+
+    // EasyEffects' pinned input device (the raw mic feeding its input chain).
+    Process {
+        id: eeInputDevProc
+        command: ["sh", "-c", "grep '^inputDevice=' ~/.config/easyeffects/db/easyeffectsrc 2>/dev/null | head -1 | cut -d= -f2-"]
+        stdout: SplitParser {
+            onRead: data => { const t = data.trim(); if (t.length) root.eeInputDevice = t }
+        }
+        Component.onCompleted: running = true
     }
 
     // Initial
