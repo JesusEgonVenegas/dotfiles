@@ -19,6 +19,12 @@ Singleton {
     // Mic (input) mirror of the above
     property int micVolume: 0
     property bool micMuted: false
+    // Active EasyEffects *output* preset (headphone EQ). "" until first query;
+    // "flat" is our empty passthrough preset = EQ off.
+    property string outputPreset: ""
+    // Last non-"flat" preset, so the bar EQ toggle knows which curve to restore
+    // when flipping EQ back on.
+    property string eqLastActive: "gpro-x"
 
     PwObjectTracker {
         objects: {
@@ -130,8 +136,54 @@ Singleton {
         onRunningChanged: if (!running) root.refreshMic()
     }
 
+    // Headphone EQ: switch the EasyEffects *output* preset via its CLI against
+    // the running --service-mode instance. The service records it as the last-
+    // loaded output preset, so the choice persists across reboots too. Set
+    // optimistically so the widget highlight flips immediately on click.
+    function setOutputPreset(name) {
+        if (name !== "flat" && name.length)
+            eqLastActive = name
+        outputPreset = name
+        outputPresetSetProc.command = ["easyeffects", "-l", name]
+        outputPresetSetProc.running = true
+    }
+
+    // Bar quick-toggle: flip EQ off (the empty "flat" preset) <-> the last
+    // active curve.
+    function toggleEq() {
+        if (outputPreset === "flat")
+            setOutputPreset(eqLastActive.length ? eqLastActive : "gpro-x")
+        else
+            setOutputPreset("flat")
+    }
+
+    function refreshOutputPreset() {
+        outputPresetGetProc.running = true
+    }
+
+    Process {
+        id: outputPresetSetProc
+        onRunningChanged: if (!running) root.refreshOutputPreset()
+    }
+
+    // `easyeffects -a output` prints the active output preset name on one line.
+    Process {
+        id: outputPresetGetProc
+        command: ["easyeffects", "-a", "output"]
+        stdout: SplitParser {
+            onRead: data => {
+                const t = data.trim()
+                if (t.length) {
+                    root.outputPreset = t
+                    if (t !== "flat")
+                        root.eqLastActive = t
+                }
+            }
+        }
+    }
+
     // Initial
-    Component.onCompleted: { refresh(); refreshMic() }
+    Component.onCompleted: { refresh(); refreshMic(); refreshOutputPreset() }
 
     // PipeWire lifecycle
     Connections {
@@ -192,6 +244,17 @@ Singleton {
         }
         function onMutedChanged() {
             refreshMic();
+        }
+    }
+
+    // Re-query the active output preset whenever the popup opens, in case it
+    // was changed elsewhere (CLI, EasyEffects GUI).
+    Connections {
+        target: VolumeState
+
+        function onPopupOpenChanged() {
+            if (VolumeState.popupOpen)
+                root.refreshOutputPreset();
         }
     }
 }

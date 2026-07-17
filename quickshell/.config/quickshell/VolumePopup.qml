@@ -81,6 +81,20 @@ Scope {
                             && n.properties
                             && n.properties["media.class"] === "Stream/Output/Audio")
 
+                    // EasyEffects output sink — present only while EasyEffects is
+                    // running its output chain, i.e. headphone EQ is available.
+                    readonly property var eeSink: !Pipewire.ready ? null
+                        : (Pipewire.nodes.values.find(n => n.name === "easyeffects_sink") || null)
+
+                    // Curated headphone-EQ presets (EasyEffects output presets in
+                    // ~/.local/share/easyeffects/output/). "flat" = EQ off.
+                    readonly property var eqPresets: [
+                        { preset: "flat",          label: "Off" },
+                        { preset: "gpro-x",        label: "G Pro X · neutral" },
+                        { preset: "gpro-x-smooth", label: "G Pro X · smooth" },
+                        { preset: "bose-qc35",     label: "Bose QC35" },
+                    ]
+
                     // ── Header row ─────────────────────────────────────────
                     RowLayout {
                         Layout.fillWidth: true
@@ -292,6 +306,72 @@ Scope {
                                 // reliable than wpctl for profile switching.
                                 command: ["pactl", "set-default-sink", modelData.name]
                                 onRunningChanged: if (!running) Volume.refresh()
+                            }
+                        }
+                    }
+
+                    // ── Headphone EQ (EasyEffects output preset) ───────────
+                    // Switches the EasyEffects output preset (AutoEq per-headphone
+                    // curves + an "Off" passthrough). Hidden unless EasyEffects is
+                    // running its output chain. See Volume.setOutputPreset().
+                    Text {
+                        visible: col.eeSink !== null
+                        text: "Headphone EQ"
+                        color: Theme.muted
+                        font.pixelSize: Theme.fontXs
+                        font.family: Theme.fontUi
+                        font.capitalization: Font.AllUppercase
+                        font.letterSpacing: 1
+                        Layout.topMargin: 14
+                        Layout.bottomMargin: 6
+                    }
+
+                    Repeater {
+                        model: col.eeSink ? col.eqPresets : []
+
+                        delegate: Rectangle {
+                            required property var modelData
+
+                            Layout.fillWidth: true
+                            implicitHeight: 32
+                            radius: Theme.radiusSm
+
+                            property bool active: Volume.outputPreset === modelData.preset
+
+                            color: active
+                                   ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+                                   : eqHov.hovered
+                                     ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.05)
+                                     : "transparent"
+                            Behavior on color { ColorAnimation { duration: 150 } }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8
+                                anchors.rightMargin: 8
+                                spacing: 8
+
+                                Rectangle {
+                                    width: 8; height: 8; radius: 4
+                                    color: active ? Theme.accent : Theme.muted
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+
+                                Text {
+                                    text: modelData.label
+                                    color: active ? Theme.accent : Theme.fg
+                                    font.pixelSize: Theme.fontSm
+                                    font.family: Theme.fontUi
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+
+                            HoverHandler { id: eqHov; cursorShape: Qt.PointingHandCursor }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: Volume.setOutputPreset(modelData.preset)
                             }
                         }
                     }

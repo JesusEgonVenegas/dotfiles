@@ -80,6 +80,7 @@ Scope {
                         Rectangle { width: 1; height: 16; color: Qt.rgba(1,1,1,0.15); anchors.verticalCenter: parent.verticalCenter }
                         VolumeWidget {}
                         MicWidget {}
+                        EqWidget {}
                         Rectangle { width: 1; height: 16; color: Qt.rgba(1,1,1,0.15); anchors.verticalCenter: parent.verticalCenter }
                         MemoryWidget {}
                         Rectangle { width: 1; height: 16; color: Qt.rgba(1,1,1,0.15); anchors.verticalCenter: parent.verticalCenter }
