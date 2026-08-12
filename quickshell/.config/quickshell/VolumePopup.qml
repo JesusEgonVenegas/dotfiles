@@ -43,8 +43,6 @@ Scope {
                 border.color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.18)
                 border.width: 1
 
-                layer.enabled: true
-
                 // Swallow clicks on the card so they don't reach the closer behind.
                 MouseArea { anchors.fill: parent }
 
@@ -93,6 +91,7 @@ Scope {
                         { preset: "gpro-x",        label: "G Pro X · neutral" },
                         { preset: "gpro-x-smooth", label: "G Pro X · smooth" },
                         { preset: "bose-qc35",     label: "Bose QC35" },
+                        { preset: "moondrop-chu2", label: "Moondrop Chu II" },
                     ]
 
                     // ── Header row ─────────────────────────────────────────
