@@ -91,7 +91,8 @@ Scope {
                         { preset: "gpro-x",        label: "G Pro X · neutral" },
                         { preset: "gpro-x-smooth", label: "G Pro X · smooth" },
                         { preset: "bose-qc35",     label: "Bose QC35" },
-                        { preset: "moondrop-chu2", label: "Moondrop Chu II" },
+                        { preset: "moondrop-chu2", label: "Moondrop Chu II · neutral" },
+                        { preset: "moondrop-chu2-smooth", label: "Moondrop Chu II · smooth" },
                     ]
 
                     // ── Header row ─────────────────────────────────────────
