@@ -93,6 +93,7 @@ Scope {
                         { preset: "bose-qc35",     label: "Bose QC35" },
                         { preset: "moondrop-chu2", label: "Moondrop Chu II · neutral" },
                         { preset: "moondrop-chu2-smooth", label: "Moondrop Chu II · smooth" },
+                        { preset: "moondrop-chu2-bass", label: "Moondrop Chu II · bass" },
                     ]
 
                     // ── Header row ─────────────────────────────────────────
